@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Fingerprint PPG Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family:'Segoe UI',sans-serif;background:#f5f5f5;color:#333; }
+    h1 { text-align:center;margin-top:20px;}
+    .container { width:90%;max-width:1000px;margin:auto; }
+    .card { background:#fff;padding:20px;margin:20px 0;border-radius:12px;
+            box-shadow:0 4px 10px rgba(0,0,0,0.1);}
+    button { background:#4CAF50;color:#fff;padding:10px 20px;border:none;
+             border-radius:6px;font-size:16px;cursor:pointer;}
+    button:hover {background:#45a049;}
+    pre {background:#eee;padding:10px;border-radius:6px;}
+    video {display:block;margin:20px auto;border-radius:12px;}
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>Fingerprint PPG Dashboard</h1>
+  <video id="video" width="400" height="300" autoplay></video>
+  <button onclick="startScan()">Start Scan</button>
+  <p id="status">Status: idle</p>
+
+  <div class="card">
+    <h2>Vitals</h2>
+    <pre id="vitals"></pre>
+  </div>
+
+  <div class="card">
+    <h2>AI Health Assessment</h2>
+    <pre id="ai_report"></pre>
+  </div>
+
+  <div class="card">
+    <h2>PPG Waveform</h2>
+    <canvas id="waveform" width="800" height="300"></canvas>
+  </div>
+</div>
+
+<script>
+let chart;
+let frames = [];
+const video = document.getElementById('video');
+
+// Get camera
+navigator.mediaDevices.getUserMedia({video:true})
+  .then(stream => { video.srcObject = stream; })
+  .catch(err => alert("Camera access denied: " + err));
+
+function startScan(){
+  frames = [];
+  document.getElementById("status").innerText="Status: capturing (8 seconds)...";
+  const ctx = document.createElement("canvas").getContext("2d");
+  ctx.canvas.width = video.videoWidth;
+  ctx.canvas.height = video.videoHeight;
+
+  let duration = 8000; // 8 seconds
+  let start = Date.now();
+
+  function captureFrame(){
+    ctx.drawImage(video, 0, 0, ctx.canvas.width, ctx.canvas.height);
+    frames.push(ctx.canvas.toDataURL("image/jpeg"));
+    if(Date.now() - start < duration){
+      requestAnimationFrame(captureFrame);
+    } else {
+      sendFrames();
+    }
+  }
+  captureFrame();
+}
+
+  function sendFrames(){
+    document.getElementById("status").innerText="Status: processing...";
+    fetch("/upload_frame", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({frames: frames})
+    })
+    .then(async res=>{
+      if(!res.ok){
+        const txt = await res.text();
+        throw new Error(txt||'Server error');
+      }
+      return res.json();
+    })
+    .then(data=>{
+      document.getElementById("status").innerText="Status: done";
+      document.getElementById("vitals").innerText =
+        Object.entries(data.features).map(([k,v])=>`${k}: ${v}`).join('\n');
+      document.getElementById("ai_report").innerText = data.ai_text;
+      const ctx = document.getElementById("waveform").getContext("2d");
+      if(chart) chart.destroy();
+      chart = new Chart(ctx,{
+        type:'line',
+        data:{labels:data.waveform.map((_,i)=>i),
+              datasets:[{label:'PPG Signal',data:data.waveform}]},
+        options:{scales:{x:{title:{display:true,text:'Frames'}},
+                         y:{title:{display:true,text:'Amplitude'}}}}
+      });
+    })
+    .catch(err=>{
+      document.getElementById("status").innerText="Status: error";
+      alert("Error: "+err);
+    });
+  }
+</script>
+</body>
+</html>
