@@ -1,6 +1,13 @@
 Flask==3.0.3
 numpy==1.26.4
-opencv-python-headless==4.9.0.80
-python-dotenv==1.0.1
-google-generativeai==0.8.2
+scipy
+pandas
 gunicorn
+requests
+opencv-python
+pillow
+tensorflow
+torch
+transformers
+tqdm
+python-dotenv
