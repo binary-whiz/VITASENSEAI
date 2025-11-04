@@ -1,0 +1,6 @@
+# Ignore sensitive and unnecessary files
+.env
+venv/
+__pycache__/
+*.pyc
+
