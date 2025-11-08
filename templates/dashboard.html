@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <title>VitalSenseAI Dashboard</title>
+    <title>VitaSenseAI Dashboard</title>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -38,25 +38,52 @@
         .abr-charts { display:flex; gap:12px; flex-wrap:wrap; }
         .abr-chart { flex:1 1 32%; min-width:220px; background:#fff; padding:10px; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.05); }
         .patient-inputs { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px; justify-content:center; }
-        .patient-inputs input { padding:8px 10px; border-radius:6px; border:1px solid #ddd; min-width:150px; }
-        .patient-inputs input:required { border-left:3px solid #d32f2f; }
+        .patient-inputs input, .patient-inputs select { padding:8px 10px; border-radius:6px; border:1px solid #ddd; min-width:150px; }
+        .patient-inputs input:required, .patient-inputs select:required { border-left:3px solid #d32f2f; }
         .compare-chart { height:260px !important; }
         .clinic-item { background:#f9f9f9; padding:12px; margin-bottom:12px; border-radius:8px; border-left:4px solid #1976d2; }
         .clinic-item strong { color:#1976d2; font-size:16px; }
         .clinic-detail { margin-top:6px; font-size:13px; color:#555; }
         .clinic-rating { color:#ff9800; font-weight:bold; }
         .error-msg { color:#d32f2f; font-size:13px; margin-top:5px; text-align:center; }
+        .chart-container { display:flex; gap:20px; flex-wrap:wrap; justify-content:center; margin-top:20px; }
+        .chart-wrapper { flex:1 1 45%; min-width:300px; background:#fff; padding:15px; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.05); }
+        .chart-wrapper canvas { height:250px !important; }
+        .waveform-container { position:relative; }
+        .waveform-scale-label { position:absolute; left:0; font-size:11px; color:#666; font-weight:bold; }
+        .waveform-info { background:#e8f4f8; padding:10px; border-radius:6px; margin-top:8px; border-left:3px solid #1976d2; font-size:13px; }
+        .waveform-info-row { margin:5px 0; display:flex; justify-content:space-between; }
+        .waveform-info-row strong { color:#1976d2; min-width:180px; }
+        .waveform-scale-box { 
+            position: absolute; 
+            top: 10px; 
+            right: 10px; 
+            background: rgba(255, 255, 255, 0.95); 
+            padding: 8px 12px; 
+            border-radius: 6px; 
+            border: 2px solid #1976d2; 
+            font-size: 11px; 
+            color: #333; 
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+            z-index: 10;
+            font-weight: bold;
+            line-height: 1.4;
+        }
     </style>
 </head>
 <body>
 <div class="container">
-    <h1>VitalSenseAI</h1>
+    <h1>VitaSenseAI</h1>
 
     <div class="controls">
         <div class="patient-inputs">
             <input id="patientName" placeholder="Patient name *" required />
             <input id="patientAge" placeholder="Age *" type="number" required />
-            <input id="patientGender" placeholder="Gender *" required />
+            <select id="patientGender" required>
+                <option value="">Select Gender *</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+            </select>
             <input id="patientPhone" placeholder="Contact number *" required />
         </div>
         <p class="error-msg" id="inputError" style="display:none;">Please fill all patient details before scanning</p>
@@ -94,12 +121,25 @@
         <div id="modelComparison" class="small">Loading model comparison...</div>
         <div id="perModelResults" style="margin-top:12px;"></div>
 
-        <h3 style="margin-top:18px;">Model Accuracy vs AI Evaluation Comparison</h3>
+        <h3 style="margin-top:18px;">Model Accuracy Comparison</h3>
         <div id="compareTableContainer">
             <table class="param-table" id="compareTable">
-                <tr><th>Model</th><th>R² (SBP)</th><th>R² (DBP)</th><th>Avg R²</th><th>AI Evaluation</th></tr>
+                <tr><th>Model</th><th>R² (SBP)</th><th>R² (DBP)</th><th>Avg R²</th><th>Accuracy Evaluation</th></tr>
                 <tr><td colspan="5">Waiting for scan...</td></tr>
             </table>
+        </div>
+
+        <!-- Bar Charts for Model Accuracy -->
+        <h3 style="margin-top:18px;">Model Accuracy Bar Charts</h3>
+        <div class="chart-container">
+            <div class="chart-wrapper">
+                <h4 style="text-align:center; color:#1976d2; margin-top:0;">Avg R² Values by Model</h4>
+                <canvas id="avgR2Chart"></canvas>
+            </div>
+            <div class="chart-wrapper">
+                <h4 style="text-align:center; color:#1976d2; margin-top:0;">Accuracy Evaluation Scores by Model</h4>
+                <canvas id="aiEvaluationChart"></canvas>
+            </div>
         </div>
     </div>
 
@@ -129,7 +169,31 @@
     <!-- PPG waveform -->
     <div class="card">
         <h2>PPG Waveform</h2><hr>
-        <canvas id="waveform"></canvas>
+        <div class="waveform-container">
+            <div class="waveform-scale-box" id="waveformScaleBox">
+                <div>X-Axis: Time (seconds)</div>
+                <div>Y-Axis: Amplitude (units)</div>
+            </div>
+            <canvas id="waveform"></canvas>
+            <div class="waveform-info">
+                <div class="waveform-info-row">
+                    <strong>Time Range:</strong>
+                    <span id="waveformTimeRange">0 - 0 seconds</span>
+                </div>
+                <div class="waveform-info-row">
+                    <strong>Signal Amplitude Range:</strong>
+                    <span id="waveformAmplitude">0 - 0 units</span>
+                </div>
+                <div class="waveform-info-row">
+                    <strong>Number of Peaks Detected:</strong>
+                    <span id="waveformPeaksCount">0</span>
+                </div>
+                <div class="waveform-info-row">
+                    <strong>Estimated Heart Rate:</strong>
+                    <span id="waveformHeartRate">0 BPM</span>
+                </div>
+            </div>
+        </div>
         <div id="ppg_desc" class="ppg-desc">
             <div id="ppg_line1">PPG description line 1 will appear here.</div>
             <div id="ppg_line2" style="margin-top:6px; color:#666;">PPG description line 2 will appear here.</div>
@@ -158,7 +222,7 @@
 </div>
 
 <script>
-let waveformChart=null, abrCharts={};
+let waveformChart=null, abrCharts={}, avgR2Chart=null, aiEvaluationChart=null;
 let currentData=null;
 
 function validatePatientInputs() {
@@ -257,10 +321,24 @@ function updateWaveformChart(waveform, peaks){
     const labels = Array.from({length: waveform.length}, (_, i) => i);
     const peakData = labels.map(i => peaks && peaks.includes(i) ? waveform[i] : null);
     
+    // Calculate waveform statistics for scale display
+    const minValue = Math.min(...waveform);
+    const maxValue = Math.max(...waveform);
+    const timePerSample = 1 / 30; // Assuming 30 Hz sampling rate
+    const totalTime = waveform.length * timePerSample;
+    const peaksCount = peaks ? peaks.length : 0;
+    const estimatedHR = peaksCount > 0 ? Math.round((peaksCount / totalTime) * 60) : 0;
+    
+    // Update waveform scale information
+    document.getElementById("waveformTimeRange").innerText = `0 - ${totalTime.toFixed(2)} seconds`;
+    document.getElementById("waveformAmplitude").innerText = `${minValue.toFixed(2)} - ${maxValue.toFixed(2)} units`;
+    document.getElementById("waveformPeaksCount").innerText = peaksCount.toString();
+    document.getElementById("waveformHeartRate").innerText = estimatedHR + " BPM";
+    
     waveformChart = new Chart(ctx, {
         type: 'line',
         data: {
-            labels: labels,
+            labels: labels.map(i => (i * timePerSample).toFixed(2)),
             datasets: [
                 {
                     label: 'PPG Signal',
@@ -285,8 +363,25 @@ function updateWaveformChart(waveform, peaks){
             responsive: true,
             maintainAspectRatio: false,
             scales: {
-                x: { display: false },
-                y: { beginAtZero: false }
+                x: { 
+                    display: true,
+                    title: {
+                        display: true,
+                        text: 'Time (seconds)',
+                        font: { size: 12, weight: 'bold' }
+                    },
+                    ticks: {
+                        maxTicksLimit: 8
+                    }
+                },
+                y: { 
+                    beginAtZero: false,
+                    title: {
+                        display: true,
+                        text: 'Signal Amplitude (units)',
+                        font: { size: 12, weight: 'bold' }
+                    }
+                }
             },
             plugins: {
                 legend: { display: true, position: 'top' }
@@ -310,9 +405,9 @@ function updateABRCharts(abr){
         else if(data.rank === "High") categories.High.push({param, percent: data.percent});
     });
     
-    createABRChart('abrLow', categories.Low, '#388e3c', 10);  // 0-10 scale
-    createABRChart('abrMed', categories.Med, '#ff9800', 10);  // 0-10 scale
-    createABRChart('abrHigh', categories.High, '#d32f2f', 20); // 0-20 scale
+    createABRChart('abrLow', categories.Low, '#388e3c', 10);
+    createABRChart('abrMed', categories.Med, '#ff9800', 10);
+    createABRChart('abrHigh', categories.High, '#d32f2f', 20);
 }
 
 function createABRChart(canvasId, data, color, maxScale){
@@ -377,6 +472,7 @@ function fetchParameterEvaluation(){
         updateParameterTable(data.evaluations);
         updatePerModelResults(data.modelmetrics, data.bestmodel);
         updateCompareTable(data.modelmetrics, data.ai_accuracy);
+        updateModelAccuracyCharts(data.modelmetrics, data.ai_accuracy);
     }).catch(err=>console.error("Parameter evaluation error:", err));
 }
 
@@ -414,7 +510,7 @@ function updatePerModelResults(metrics, bestModel){
 }
 
 function updateCompareTable(metrics, aiAccuracy){
-    let html = "<tr><th>Model</th><th>R² (SBP)</th><th>R² (DBP)</th><th>Avg R²</th><th>AI Evaluation</th></tr>";
+    let html = "<tr><th>Model</th><th>R² (SBP)</th><th>R² (DBP)</th><th>Avg R²</th><th>Accuracy Evaluation</th></tr>";
     
     Object.entries(metrics).forEach(([model, m]) => {
         const aiEval = aiAccuracy && aiAccuracy[model] ? aiAccuracy[model].toFixed(3) : "N/A";
@@ -428,6 +524,133 @@ function updateCompareTable(metrics, aiAccuracy){
     });
     
     document.getElementById("compareTable").innerHTML = html;
+}
+
+function updateModelAccuracyCharts(metrics, aiAccuracy){
+    const models = Object.keys(metrics);
+    const avgR2Values = models.map(m => {
+        const val = metrics[m]["Avg R²"];
+        return typeof val === 'number' ? val : parseFloat(val) || 0;
+    });
+    
+    const aiEvalValues = models.map(m => {
+        const val = aiAccuracy && aiAccuracy[m] ? aiAccuracy[m] : 0;
+        return typeof val === 'number' ? val : parseFloat(val) || 0;
+    });
+    
+    // Chart 1: Avg R² Values with 0-0.35 scale
+    const ctx1 = document.getElementById('avgR2Chart').getContext('2d');
+    if(avgR2Chart) avgR2Chart.destroy();
+    
+    avgR2Chart = new Chart(ctx1, {
+        type: 'bar',
+        data: {
+            labels: models,
+            datasets: [{
+                label: 'Avg R² Value',
+                data: avgR2Values,
+                backgroundColor: [
+                    '#1976d2',
+                    '#388e3c',
+                    '#d32f2f',
+                    '#ff9800',
+                    '#9c27b0'
+                ],
+                borderColor: [
+                    '#1565c0',
+                    '#2e7d32',
+                    '#c62828',
+                    '#e65100',
+                    '#7b1fa2'
+                ],
+                borderWidth: 1.5
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            indexAxis: 'x',
+            scales: {
+                y: { 
+                    beginAtZero: true, 
+                    max: 0.35,
+                    ticks: { stepSize: 0.035 },
+                    title: {
+                        display: true,
+                        text: 'Avg R² Value',
+                        font: { size: 12, weight: 'bold' }
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Models',
+                        font: { size: 12, weight: 'bold' }
+                    }
+                }
+            },
+            plugins: {
+                legend: { display: false }
+            }
+        }
+    });
+    
+    // Chart 2: AI Evaluation Scores with 0-1.0 scale
+    const ctx2 = document.getElementById('aiEvaluationChart').getContext('2d');
+    if(aiEvaluationChart) aiEvaluationChart.destroy();
+    
+    aiEvaluationChart = new Chart(ctx2, {
+        type: 'bar',
+        data: {
+            labels: models,
+            datasets: [{
+                label: 'AI Evaluation Score',
+                data: aiEvalValues,
+                backgroundColor: [
+                    '#1976d2',
+                    '#388e3c',
+                    '#d32f2f',
+                    '#ff9800',
+                    '#9c27b0'
+                ],
+                borderColor: [
+                    '#1565c0',
+                    '#2e7d32',
+                    '#c62828',
+                    '#e65100',
+                    '#7b1fa2'
+                ],
+                borderWidth: 1.5
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            indexAxis: 'x',
+            scales: {
+                y: { 
+                    beginAtZero: true, 
+                    max: 1.0,
+                    ticks: { stepSize: 0.1 },
+                    title: {
+                        display: true,
+                        text: 'AI Evaluation Score',
+                        font: { size: 12, weight: 'bold' }
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Models',
+                        font: { size: 12, weight: 'bold' }
+                    }
+                }
+            },
+            plugins: {
+                legend: { display: false }
+            }
+        }
+    });
 }
 
 function fetchAISummary(){
